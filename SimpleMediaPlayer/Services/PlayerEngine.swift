@@ -250,10 +250,16 @@ final class PlayerEngine {
 
     private func loadWaveform(from url: URL) {
         let generator = waveformGenerator
+        let bucketCount = 1_000
+        if let cached = WaveformCache.load(for: url, bucketCount: bucketCount) {
+            waveform = cached
+            return
+        }
         waveformTask = Task {
             do {
-                let samples = try await generator.samples(for: url, bucketCount: 1_000)
+                let samples = try await generator.samples(for: url, bucketCount: bucketCount)
                 guard !Task.isCancelled else { return }
+                WaveformCache.save(samples, for: url, bucketCount: bucketCount)
                 self.waveform = samples
             } catch {
                 guard !Task.isCancelled else { return }
