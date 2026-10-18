@@ -1,6 +1,6 @@
 # Simple Media Player
 
-A small audio player for **iOS and macOS**, written in SwiftUI from a single multiplatform target. It uses only Apple system frameworks (AVFoundation, Accelerate, SwiftData, SwiftUI) and has no third-party dependencies.
+A small audio player for **iOS and macOS**, written in SwiftUI from a single multiplatform target. It uses only Apple system frameworks (AVFoundation, Accelerate, MediaPlayer, SwiftData, SwiftUI) and has no third-party dependencies.
 
 ## Features
 
@@ -11,6 +11,7 @@ A small audio player for **iOS and macOS**, written in SwiftUI from a single mul
 - **Live spectrum**: 40 log-spaced bars computed with an FFT on the playing audio.
 - **10-band equalizer** (AVAudioEngine + AVAudioUnitEQ) with presets: Flat, Bass Boost, Treble Boost, Vocal, Rock. Gains are remembered between launches.
 - **Transport**: play/pause, previous (restarts the track after 3 s), next, and automatic advance to the next track.
+- **Now Playing**: the track title, duration, and position appear on the lock screen, in Control Center, and in the macOS Now Playing menu, with play, pause, skip, and seek. Headphone buttons and media keys work too.
 
 ## Requirements
 
@@ -59,7 +60,6 @@ SimpleMediaPlayer/
 
 ## Not done yet
 
-- Now Playing info and lock-screen or Control Center controls (`MediaPlayer`)
 - macOS menu commands and keyboard shortcuts (Space to play, arrow keys to seek)
 - Interruption and route-change handling on iOS (calls, unplugged headphones)
 - Metadata (artist, artwork) and volume control

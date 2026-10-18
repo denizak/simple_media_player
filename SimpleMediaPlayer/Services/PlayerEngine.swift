@@ -1,4 +1,5 @@
 import AVFoundation
+import MediaPlayer
 import Observation
 
 /// Frequencies of the 10 equalizer bands, in Hz.
@@ -75,6 +76,7 @@ final class PlayerEngine {
             format: nil,
             block: Self.makeSpectrumTap(spectrum)
         )
+        setUpRemoteCommands()
     }
 
     /// Built outside the main actor, because the tap runs on the audio thread.
@@ -120,6 +122,7 @@ final class PlayerEngine {
         playerNode.play()
         isPlaying = true
         startTicker()
+        updateNowPlaying()
     }
 
     func pause() {
@@ -128,6 +131,7 @@ final class PlayerEngine {
         isPlaying = false
         stopTicker()
         spectrum.reset()
+        updateNowPlaying()
     }
 
     func next() {
@@ -158,6 +162,7 @@ final class PlayerEngine {
         if isPlaying {
             playerNode.play()
         }
+        updateNowPlaying()
     }
 
     func seek(toFraction fraction: Double) {
@@ -198,12 +203,14 @@ final class PlayerEngine {
             if isScoped { track.url.stopAccessingSecurityScopedResource() }
             errorMessage = "Couldn't open \(track.title): \(error.localizedDescription)"
         }
+        updateNowPlaying()
     }
 
     /// Stops playback and clears the schedule, keeping the queue.
     private func stop() {
         unload()
         currentTime = 0
+        updateNowPlaying()
     }
 
     private func unload() {
@@ -305,5 +312,60 @@ final class PlayerEngine {
     private func stopTicker() {
         ticker?.cancel()
         ticker = nil
+    }
+
+    // MARK: - Now Playing and remote commands
+
+    /// Hooks up the lock screen, Control Center, headphone and media-key controls.
+    private func setUpRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        addHandler(center.playCommand) { $0.resume(); return $0.isPlaying }
+        addHandler(center.pauseCommand) { $0.pause(); return true }
+        addHandler(center.togglePlayPauseCommand) { $0.togglePlayPause(); return true }
+        addHandler(center.nextTrackCommand) { $0.next(); return true }
+        addHandler(center.previousTrackCommand) { $0.previous(); return true }
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            let time = event.positionTime
+            return MainActor.assumeIsolated {
+                guard let self, self.file != nil else { return .noActionableNowPlayingItem }
+                self.seek(to: time)
+                return .success
+            }
+        }
+    }
+
+    /// Remote command handlers are called on the main thread.
+    private func addHandler(_ command: MPRemoteCommand, _ action: @escaping @MainActor (PlayerEngine) -> Bool) {
+        command.addTarget { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.currentTrack != nil else { return .noActionableNowPlayingItem }
+                return action(self) ? .success : .commandFailed
+            }
+        }
+    }
+
+    /// Publishes the current track and position. The system extrapolates elapsed time from the rate,
+    /// so this runs only when playback state changes, not on every tick.
+    private func updateNowPlaying() {
+        let center = MPNowPlayingInfoCenter.default()
+        MPRemoteCommandCenter.shared().nextTrackCommand.isEnabled = hasNext
+        guard let track = currentTrack, file != nil else {
+            center.nowPlayingInfo = nil
+            #if os(macOS)
+            center.playbackState = .stopped
+            #endif
+            return
+        }
+        center.nowPlayingInfo = [
+            MPMediaItemPropertyTitle: track.title,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+        ]
+        #if os(macOS)
+        center.playbackState = isPlaying ? .playing : .paused
+        #endif
     }
 }
