@@ -15,6 +15,8 @@ final class PlayerEngine {
     private(set) var duration: TimeInterval = 0
     private(set) var errorMessage: String?
     private(set) var waveform: [Float] = []
+    /// How much of the current file has been decoded into `waveform` (0...1).
+    private(set) var waveformLoaded: Double = 0
     /// Gain in dB for each equalizer band, kept between launches.
     private(set) var gains: [Float]
 
@@ -32,7 +34,6 @@ final class PlayerEngine {
     private var generation = 0
     private var ticker: Task<Void, Never>?
     private var waveformTask: Task<Void, Never>?
-    private let waveformGenerator = WaveformGenerator()
 
     var currentTrack: Track? {
         currentIndex.map { queue[$0] }
@@ -194,6 +195,7 @@ final class PlayerEngine {
         waveformTask?.cancel()
         waveformTask = nil
         waveform = []
+        waveformLoaded = 0
         generation += 1
         playerNode.stop()
         hasSchedule = false
@@ -249,18 +251,22 @@ final class PlayerEngine {
     }
 
     private func loadWaveform(from url: URL) {
-        let generator = waveformGenerator
         let bucketCount = 1_000
         if let cached = WaveformCache.load(for: url, bucketCount: bucketCount) {
             waveform = cached
+            waveformLoaded = 1
             return
         }
         waveformTask = Task {
             do {
-                let samples = try await generator.samples(for: url, bucketCount: bucketCount)
+                // Partial results arrive while the file decodes; only the final one is cached.
+                for try await update in WaveformGenerator.stream(for: url, bucketCount: bucketCount) {
+                    guard !Task.isCancelled else { return }
+                    self.waveform = update.samples
+                    self.waveformLoaded = update.loadedFraction
+                }
                 guard !Task.isCancelled else { return }
-                WaveformCache.save(samples, for: url, bucketCount: bucketCount)
-                self.waveform = samples
+                WaveformCache.save(self.waveform, for: url, bucketCount: bucketCount)
             } catch {
                 guard !Task.isCancelled else { return }
                 self.errorMessage = "Couldn't draw waveform: \(error.localizedDescription)"

@@ -3,6 +3,8 @@ import SwiftUI
 /// SoundCloud-style waveform: bars left of the playhead are highlighted, and tapping or dragging seeks.
 struct WaveformScrubber: View {
     let samples: [Float]
+    /// How much of the waveform has been decoded (0...1). The bars fade in up to this point.
+    let loaded: Double
     let progress: Double
     @Binding var scrubFraction: Double?
     let onSeek: (Double) -> Void
@@ -14,7 +16,10 @@ struct WaveformScrubber: View {
 
             ZStack(alignment: .leading) {
                 // Equatable, so these bars are only redrawn when the samples or width change, not on every playback tick.
-                WaveformBars(samples: samples, color: Color.gray.opacity(0.5)).equatable()
+                WaveformBars(samples: samples, color: Color.gray.opacity(0.5))
+                    .equatable()
+                    .mask { Self.revealMask(width: width, loaded: loaded) }
+                    .animation(.easeOut(duration: 0.3), value: loaded)
                 WaveformBars(samples: samples, color: .accentColor)
                     .equatable()
                     .mask(alignment: .leading) {
@@ -37,6 +42,19 @@ struct WaveformScrubber: View {
         .accessibilityElement()
         .accessibilityLabel("Seek")
         .accessibilityValue(Text("\(Int(progress * 100)) percent"))
+    }
+
+    /// Opaque up to the decoded position, then a short fade to transparent at the leading edge.
+    private static func revealMask(width: CGFloat, loaded: Double) -> some View {
+        let revealed = width * CGFloat(loaded)
+        let edge: CGFloat = 24
+        return HStack(spacing: 0) {
+            Rectangle().frame(width: max(revealed - edge, 0))
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: min(edge, revealed))
+            Spacer(minLength: 0)
+        }
+        .frame(width: width, alignment: .leading)
     }
 
     private static func fraction(at x: CGFloat, width: CGFloat) -> Double {

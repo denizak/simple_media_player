@@ -19,6 +19,7 @@ struct PlayerView: View {
             VStack(spacing: 4) {
                 WaveformScrubber(
                     samples: engine.waveform,
+                    loaded: engine.waveformLoaded,
                     progress: engine.progress,
                     scrubFraction: $scrubFraction,
                     onSeek: { engine.seek(toFraction: $0) }
