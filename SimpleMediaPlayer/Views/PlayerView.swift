@@ -58,15 +58,18 @@ struct PlayerView: View {
                         .font(.title2)
                 }
                 .disabled(!engine.hasNext)
-
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .trailing) {
                 Button {
                     isShowingEqualizer = true
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.title2)
                 }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             if let message = engine.errorMessage {
                 Text(message)
