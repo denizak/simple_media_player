@@ -25,6 +25,8 @@ final class PlayerEngine {
     private let audioEngine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let eqNode = AVAudioUnitEQ(numberOfBands: eqBandFrequencies.count)
+    /// Live spectrum of what is being played, drawn by `SpectrumView`.
+    let spectrum = SpectrumAnalyzer()
     private var file: AVAudioFile?
     private var scopedURL: URL?
     /// Frame at which the current schedule starts; `playbackPosition` is measured from here.
@@ -66,6 +68,19 @@ final class PlayerEngine {
             band.bandwidth = 1
             band.gain = gains[index]
             band.bypass = false
+        }
+        audioEngine.mainMixerNode.installTap(
+            onBus: 0,
+            bufferSize: 1024,
+            format: nil,
+            block: Self.makeSpectrumTap(spectrum)
+        )
+    }
+
+    /// Built outside the main actor, because the tap runs on the audio thread.
+    private nonisolated static func makeSpectrumTap(_ analyzer: SpectrumAnalyzer) -> AVAudioNodeTapBlock {
+        { buffer, _ in
+            analyzer.process(buffer)
         }
     }
 
@@ -112,6 +127,7 @@ final class PlayerEngine {
         playerNode.pause()
         isPlaying = false
         stopTicker()
+        spectrum.reset()
     }
 
     func next() {
@@ -198,6 +214,7 @@ final class PlayerEngine {
         waveformLoaded = 0
         generation += 1
         playerNode.stop()
+        spectrum.reset()
         hasSchedule = false
         seekFrame = 0
         file = nil

@@ -35,6 +35,8 @@ struct PlayerView: View {
             }
             .disabled(engine.currentTrack == nil)
 
+            SpectrumView(analyzer: engine.spectrum, isPlaying: engine.isPlaying)
+
             HStack(spacing: 40) {
                 Button {
                     engine.previous()

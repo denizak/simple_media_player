@@ -60,6 +60,8 @@ struct EqualizerView: View {
                 }
             }
         }
+        // macOS sheets size to their content, and the list has none, so give the sheet a fixed size.
+        .frame(minWidth: 420, minHeight: 560)
     }
 
     private static func label(for frequency: Float) -> String {
